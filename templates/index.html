@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#111318">
+  <title>Haroon-2.5-HK</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand"><div class="logo">H</div><div><b>Haroon</b><small>2.5-HK</small></div></div>
+    <button class="new-chat" id="newChat">＋ محادثة جديدة</button>
+    <div class="side-label">مساحة العمل</div>
+    <div class="side-item">✦ <span>مساعد Haroon AI</span></div>
+    <div class="side-item">⌘ <span>برمجة Lua وRoblox</span></div>
+    <div class="sidebar-bottom"><div class="status-dot"></div><span id="modelStatus">جارٍ فحص النموذج...</span></div>
+  </aside>
+  <main class="main">
+    <header class="topbar">
+      <button class="menu-btn" id="menuBtn" aria-label="فتح القائمة">☰</button>
+      <div class="mobile-brand">Haroon-2.5-HK</div>
+      <span class="model-pill"><span class="status-dot"></span> نموذجك الخاص</span>
+    </header>
+    <section class="chat-area" id="chatArea">
+      <div class="welcome" id="welcome">
+        <div class="welcome-logo">H</div>
+        <h1>أهلًا بك في <span>Haroon</span></h1>
+        <p>مساعدك الذكي الخاص — مساحة لبناء الأفكار وكتابة الأكواد.</p>
+        <div class="suggestions">
+          <button data-prompt="اشرح لي أساسيات لغة Luau في Roblox Studio">🎮 تعلّم Luau</button>
+          <button data-prompt="اكتب مثالًا لسكربت Roblox واشرح مكان وضعه">⌘ سكربت Roblox</button>
+          <button data-prompt="ساعدني في تنظيم فكرة مشروع برمجي">✦ فكرة برمجية</button>
+        </div>
+      </div>
+      <div class="messages" id="messages"></div>
+    </section>
+    <div class="composer-wrap">
+      <form class="composer" id="chatForm">
+        <textarea id="messageInput" rows="1" placeholder="اكتب رسالتك إلى Haroon..." autocomplete="off"></textarea>
+        <button type="submit" id="sendBtn" aria-label="إرسال">↑</button>
+      </form>
+      <p class="disclaimer">Haroon-2.5-HK نموذج قيد التطوير؛ قد تكون الإجابات غير دقيقة.</p>
+    </div>
+  </main>
+</div>
+<div class="overlay" id="overlay"></div>
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body></html>
