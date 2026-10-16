@@ -1,281 +1,316 @@
-// Script: Haroon-2.5-HK Chat
-// Location: static/script.js
-
 "use strict";
 
-document.addEventListener("DOMContentLoaded", () => {
-    const chatForm =
-        document.getElementById("chatForm") ||
-        document.getElementById("messageForm");
+const form = document.getElementById("chatForm");
+const input = document.getElementById("messageInput");
+const messages = document.getElementById("messages");
+const welcome = document.getElementById("welcome");
+const sendBtn = document.getElementById("sendBtn");
+const statusEl = document.getElementById("modelStatus");
+const sidebar = document.getElementById("sidebar");
+const overlay = document.getElementById("overlay");
+const chatArea = document.getElementById("chatArea");
 
-    const messageInput =
-        document.getElementById("messageInput") ||
-        document.getElementById("userInput");
+let historyItems = [];
+let isSending = false;
+let currentRequestId = 0;
 
-    const chatMessages =
-        document.getElementById("chatMessages") ||
-        document.getElementById("messages");
+function addMessage(role, content, extraClass = "") {
+if (welcome) welcome.style.display = "none";
 
-    const sendButton =
-        document.getElementById("sendButton") ||
-        document.getElementById("sendBtn");
+const row = document.createElement("div");
+row.className = `message ${role} ${extraClass}`.trim();
 
-    const statusElement =
-        document.getElementById("modelStatus");
+const avatar = document.createElement("div");
+avatar.className = "avatar";
+avatar.textContent = role === "user" ? "أنت" : "H";
 
-    const conversation = [];
+const body = document.createElement("div");
+body.className = "message-content";
+body.textContent = String(content ?? "");
 
-    let sending = false;
+row.append(avatar, body);
+messages.appendChild(row);
 
-    // إنشاء عنصر رسالة بأمان
-    function addMessage(role, content) {
-        if (!chatMessages) {
-            console.error("لم يتم العثور على عنصر عرض الرسائل.");
-            return;
-        }
+scrollToBottom();
 
-        const message = document.createElement("div");
-        message.className = `message ${role}-message`;
+return row;
 
-        const bubble = document.createElement("div");
-        bubble.className = "message-content";
-        bubble.textContent = content;
+}
 
-        message.appendChild(bubble);
-        chatMessages.appendChild(message);
+function scrollToBottom() {
+if (!chatArea) return;
 
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-
-        return message;
-    }
-
-    // تحديث حالة الإرسال
-    function setSending(value) {
-        sending = value;
-
-        if (sendButton) {
-            sendButton.disabled = value;
-        }
-
-        if (messageInput) {
-            messageInput.disabled = value;
-        }
-    }
-
-    // قراءة JSON بطريقة آمنة
-    async function readJSON(response) {
-        const responseText = await response.text();
-
-        if (!responseText.trim()) {
-            throw new Error(
-                `الخادم أعاد استجابة فارغة (HTTP ${response.status}). ` +
-                "قد يكون Render أعاد تشغيل الخادم أو انتهت مهلة الطلب."
-            );
-        }
-
-        let data;
-
-        try {
-            data = JSON.parse(responseText);
-        } catch (error) {
-            console.error(
-                "استجابة الخادم ليست JSON صالحًا:",
-                responseText.slice(0, 500)
-            );
-
-            throw new Error(
-                "تعذر قراءة استجابة الخادم. تحقق من سجلات Render."
-            );
-        }
-
-        if (!response.ok) {
-            throw new Error(
-                data.error ||
-                data.status ||
-                `حدث خطأ في الخادم: HTTP ${response.status}`
-            );
-        }
-
-        return data;
-    }
-
-    // فحص حالة النموذج
-    async function checkModelStatus() {
-        if (!statusElement) {
-            return;
-        }
-
-        try {
-            const response = await fetch("/api/status", {
-                method: "GET",
-                headers: {
-                    "Accept": "application/json"
-                },
-                cache: "no-store"
-            });
-
-            const data = await readJSON(response);
-
-            statusElement.textContent = data.status || (
-                data.ready
-                    ? "النموذج جاهز"
-                    : "النموذج غير جاهز"
-            );
-
-            statusElement.classList.toggle(
-                "model-ready",
-                Boolean(data.ready)
-            );
-
-            statusElement.classList.toggle(
-                "model-not-ready",
-                !data.ready
-            );
-
-        } catch (error) {
-            console.error("Status error:", error);
-
-            statusElement.textContent =
-                "تعذر الاتصال بالنموذج";
-        }
-    }
-
-    // إرسال الرسالة
-    async function sendMessage(text) {
-        if (sending || !text.trim()) {
-            return;
-        }
-
-        const userMessage = text.trim();
-
-        addMessage("user", userMessage);
-
-        conversation.push({
-            role: "user",
-            content: userMessage
-        });
-
-        setSending(true);
-
-        const loadingMessage = addMessage(
-            "assistant",
-            "يفكر Haroon..."
-        );
-
-        try {
-            const response = await fetch("/api/chat", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Accept": "application/json"
-                },
-                body: JSON.stringify({
-                    message: userMessage,
-                    history: conversation.slice(-8, -1)
-                })
-            });
-
-            const data = await readJSON(response);
-
-            if (!data || typeof data.answer !== "string") {
-                throw new Error(
-                    "وصل رد من الخادم، لكنه لا يحتوي على إجابة صالحة."
-                );
-            }
-
-            if (loadingMessage) {
-                loadingMessage.remove();
-            }
-
-            addMessage(
-                "assistant",
-                data.answer || "لم يتمكن Haroon من توليد إجابة."
-            );
-
-            conversation.push({
-                role: "assistant",
-                content: data.answer
-            });
-
-        } catch (error) {
-            console.error("Chat error:", error);
-
-            if (loadingMessage) {
-                loadingMessage.remove();
-            }
-
-            addMessage(
-                "assistant",
-                `تعذر الحصول على الإجابة: ${error.message}`
-            );
-
-            // إزالة رسالة المستخدم من السجل حتى لا يتكرر الطلب
-            conversation.pop();
-
-        } finally {
-            setSending(false);
-
-            if (messageInput) {
-                messageInput.disabled = false;
-                messageInput.focus();
-            }
-
-            if (sendButton) {
-                sendButton.disabled = false;
-            }
-        }
-    }
-
-    // ربط نموذج الدردشة
-    if (chatForm && messageInput) {
-        chatForm.addEventListener("submit", async (event) => {
-            event.preventDefault();
-
-            if (sending) {
-                return;
-            }
-
-            const text = messageInput.value.trim();
-
-            if (!text) {
-                return;
-            }
-
-            messageInput.value = "";
-
-            await sendMessage(text);
-        });
-
-    } else {
-        console.error(
-            "لم يتم العثور على عناصر الدردشة. " +
-            "تحقق من chatForm وmessageInput في templates/index.html."
-        );
-    }
-
-    // دعم زر الإرسال إذا كان خارج النموذج
-    if (
-        sendButton &&
-        (!chatForm || !chatForm.contains(sendButton)) &&
-        messageInput
-    ) {
-        sendButton.addEventListener("click", async () => {
-            if (sending) {
-                return;
-            }
-
-            const text = messageInput.value.trim();
-
-            if (!text) {
-                return;
-            }
-
-            messageInput.value = "";
-
-            await sendMessage(text);
-        });
-    }
-
-    // فحص حالة النموذج عند فتح الموقع
-    checkModelStatus();
+requestAnimationFrame(() => {
+    chatArea.scrollTop = chatArea.scrollHeight;
 });
+
+}
+
+function setSending(sending) {
+isSending = sending;
+
+if (sendBtn) {
+    sendBtn.disabled = sending;
+    sendBtn.textContent = sending ? "…" : "↑";
+}
+
+if (input) {
+    input.disabled = sending;
+}
+
+}
+
+function closeSidebar() {
+if (sidebar) sidebar.classList.remove("open");
+if (overlay) overlay.classList.remove("show");
+}
+
+async function readJSON(response) {
+const rawText = await response.text();
+
+if (!rawText.trim()) {
+    throw new Error(
+        `الخادم أعاد استجابة فارغة (HTTP ${response.status}). قد يكون النموذج بطيئًا أو توقف أثناء التوليد.`
+    );
+}
+
+let data;
+
+try {
+    data = JSON.parse(rawText);
+} catch {
+    throw new Error(
+        `استجابة الخادم ليست JSON صالحًا (HTTP ${response.status}). تحقق من سجلات Render.`
+    );
+}
+
+if (!response.ok) {
+    throw new Error(
+        data.error ||
+        data.message ||
+        `حدث خطأ في الخادم (HTTP ${response.status}).`
+    );
+}
+
+return data;
+
+}
+
+async function sendMessage(text) {
+text = String(text || "").trim();
+
+if (!text || isSending) return;
+
+const requestId = ++currentRequestId;
+
+addMessage("user", text);
+
+// نحتفظ برسالة المستخدم ضمن السجل، ثم نرسل السياق السابق فقط.
+const previousHistory = historyItems.slice(-8);
+
+historyItems.push({
+    role: "user",
+    content: text
+});
+
+// منع تراكم سجل المحادثة بلا حدود.
+if (historyItems.length > 20) {
+    historyItems = historyItems.slice(-20);
+}
+
+input.value = "";
+input.style.height = "auto";
+setSending(true);
+
+const typing = addMessage(
+    "assistant",
+    "يفكر Haroon...",
+    "typing"
+);
+
+try {
+    const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        },
+        body: JSON.stringify({
+            message: text,
+            history: previousHistory
+        })
+    });
+
+    const data = await readJSON(response);
+
+    if (requestId !== currentRequestId) return;
+
+    if (typeof data.answer !== "string" || !data.answer.trim()) {
+        throw new Error("لم يرجع النموذج إجابة نصية. تحقق من النموذج في الخادم.");
+    }
+
+    typing.remove();
+
+    addMessage("assistant", data.answer.trim());
+
+    historyItems.push({
+        role: "assistant",
+        content: data.answer.trim()
+    });
+
+    if (historyItems.length > 20) {
+        historyItems = historyItems.slice(-20);
+    }
+
+} catch (error) {
+    if (requestId !== currentRequestId) return;
+
+    typing.remove();
+
+    console.error("Haroon chat error:", error);
+
+    addMessage(
+        "assistant",
+        `تعذر الحصول على الإجابة: ${error.message}`
+    );
+
+    // إزالة رسالة المستخدم الفاشلة من السياق كي لا تُرسل لاحقًا
+    // وكأن النموذج أجاب عنها.
+    if (
+        historyItems.length &&
+        historyItems[historyItems.length - 1].role === "user" &&
+        historyItems[historyItems.length - 1].content === text
+    ) {
+        historyItems.pop();
+    }
+
+} finally {
+    if (requestId === currentRequestId) {
+        setSending(false);
+        input.focus();
+        scrollToBottom();
+    }
+}
+
+}
+
+// إرسال الرسالة من النموذج الأصلي.
+if (form && input) {
+form.addEventListener("submit", event => {
+event.preventDefault();
+sendMessage(input.value);
+});
+
+// Enter للإرسال، وShift + Enter لإضافة سطر جديد.
+input.addEventListener("keydown", event => {
+    if (
+        event.key === "Enter" &&
+        !event.shiftKey &&
+        !event.isComposing
+    ) {
+        event.preventDefault();
+
+        if (!isSending) {
+            sendMessage(input.value);
+        }
+    }
+});
+
+input.addEventListener("input", () => {
+    input.style.height = "auto";
+    input.style.height =
+        Math.min(input.scrollHeight, 180) + "px";
+});
+
+}
+
+// أزرار الأسئلة المقترحة الموجودة في index.html.
+document.querySelectorAll("[data-prompt]").forEach(button => {
+button.addEventListener("click", () => {
+if (isSending) return;
+
+    input.value = button.dataset.prompt || "";
+    sendMessage(input.value);
+});
+
+});
+
+// بدء محادثة جديدة.
+const newChatBtn = document.getElementById("newChat");
+
+if (newChatBtn) {
+newChatBtn.addEventListener("click", () => {
+// إبطال الطلب السابق في الواجهة.
+currentRequestId++;
+
+    messages.innerHTML = "";
+    historyItems = [];
+
+    if (welcome) welcome.style.display = "block";
+
+    setSending(false);
+    closeSidebar();
+
+    input.value = "";
+    input.style.height = "auto";
+    input.focus();
+});
+
+}
+
+// فتح القائمة الجانبية على الهاتف.
+const menuBtn = document.getElementById("menuBtn");
+
+if (menuBtn) {
+menuBtn.addEventListener("click", () => {
+if (sidebar) sidebar.classList.add("open");
+if (overlay) overlay.classList.add("show");
+});
+}
+
+if (overlay) {
+overlay.addEventListener("click", closeSidebar);
+}
+
+// فحص حالة النموذج.
+async function checkModelStatus() {
+if (!statusEl) return;
+
+try {
+    const response = await fetch("/api/status", {
+        method: "GET",
+        headers: {
+            "Accept": "application/json"
+        },
+        cache: "no-store"
+    });
+
+    const data = await readJSON(response);
+
+    statusEl.textContent = data.ready
+        ? "النموذج المدرّب جاهز"
+        : "الواجهة جاهزة — الأوزان تحتاج تدريبًا";
+
+    const dot = statusEl.previousElementSibling;
+
+    if (dot) {
+        dot.style.background = data.ready
+            ? "#5cc79b"
+            : "#e0a64b";
+    }
+
+} catch (error) {
+    console.error("Haroon status error:", error);
+
+    statusEl.textContent = "تعذر فحص حالة النموذج";
+
+    const dot = statusEl.previousElementSibling;
+
+    if (dot) {
+        dot.style.background = "#e05252";
+    }
+}
+
+}
+
+checkModelStatus();
