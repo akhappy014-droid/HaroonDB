@@ -1,6 +1,19 @@
 """
+============================================================
 Haroon-2.5-HK
-Decoder-only Transformer language model.
+Larger Decoder-Only Transformer Language Model
+
+Architecture:
+    Layers:       6
+    Attention:    8 heads
+    Embedding:    256
+    Context:      256 tokens
+    Vocabulary:   256 UTF-8 bytes
+
+IMPORTANT:
+    This architecture requires training from scratch.
+    Old checkpoints are not compatible.
+============================================================
 """
 
 import torch
@@ -8,16 +21,27 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 
+# ============================================================
+# Configuration
+# ============================================================
+
 class GPTConfig:
-    vocab_size = 2048
+    vocab_size = 256
     block_size = 256
-    n_embd = 192
-    n_head = 6
-    n_layer = 4
+
+    n_embd = 256
+    n_head = 8
+    n_layer = 6
+
     dropout = 0.1
 
 
+# ============================================================
+# Causal Self Attention
+# ============================================================
+
 class CausalSelfAttention(nn.Module):
+
     def __init__(self, config):
         super().__init__()
 
@@ -26,8 +50,15 @@ class CausalSelfAttention(nn.Module):
         self.n_head = config.n_head
         self.head_dim = config.n_embd // config.n_head
 
-        self.qkv = nn.Linear(config.n_embd, 3 * config.n_embd)
-        self.proj = nn.Linear(config.n_embd, config.n_embd)
+        self.qkv = nn.Linear(
+            config.n_embd,
+            3 * config.n_embd,
+        )
+
+        self.proj = nn.Linear(
+            config.n_embd,
+            config.n_embd,
+        )
 
         self.attn_drop = nn.Dropout(config.dropout)
         self.resid_drop = nn.Dropout(config.dropout)
@@ -35,55 +66,104 @@ class CausalSelfAttention(nn.Module):
         self.register_buffer(
             "mask",
             torch.tril(
-                torch.ones(config.block_size, config.block_size)
-            ).view(1, 1, config.block_size, config.block_size),
+                torch.ones(
+                    config.block_size,
+                    config.block_size,
+                    dtype=torch.bool,
+                )
+            ).view(
+                1,
+                1,
+                config.block_size,
+                config.block_size,
+            ),
             persistent=False,
         )
 
     def forward(self, x):
-        b, t, c = x.shape
 
-        q, k, v = self.qkv(x).split(c, dim=2)
+        batch_size, seq_len, channels = x.shape
+
+        q, k, v = self.qkv(x).split(
+            channels,
+            dim=2,
+        )
 
         q = q.view(
-            b, t, self.n_head, self.head_dim
+            batch_size,
+            seq_len,
+            self.n_head,
+            self.head_dim,
         ).transpose(1, 2)
 
         k = k.view(
-            b, t, self.n_head, self.head_dim
+            batch_size,
+            seq_len,
+            self.n_head,
+            self.head_dim,
         ).transpose(1, 2)
 
         v = v.view(
-            b, t, self.n_head, self.head_dim
+            batch_size,
+            seq_len,
+            self.n_head,
+            self.head_dim,
         ).transpose(1, 2)
 
-        scores = (q @ k.transpose(-2, -1)) / (
-            self.head_dim ** 0.5
-        )
+        scores = (
+            q @ k.transpose(-2, -1)
+        ) / (self.head_dim ** 0.5)
 
         scores = scores.masked_fill(
-            self.mask[:, :, :t, :t] == 0,
+            ~self.mask[:, :, :seq_len, :seq_len],
             float("-inf"),
         )
 
-        weights = F.softmax(scores.float(), dim=-1).to(q.dtype)
+        weights = F.softmax(
+            scores.float(),
+            dim=-1,
+        ).to(q.dtype)
+
         weights = self.attn_drop(weights)
 
-        y = weights @ v
+        output = weights @ v
 
-        y = y.transpose(1, 2).contiguous().view(b, t, c)
+        output = output.transpose(
+            1,
+            2,
+        ).contiguous().view(
+            batch_size,
+            seq_len,
+            channels,
+        )
 
-        return self.resid_drop(self.proj(y))
+        output = self.proj(output)
 
+        return self.resid_drop(output)
+
+
+# ============================================================
+# Feed Forward Network
+# ============================================================
 
 class MLP(nn.Module):
+
     def __init__(self, config):
         super().__init__()
 
         self.net = nn.Sequential(
-            nn.Linear(config.n_embd, 4 * config.n_embd),
+            nn.Linear(
+                config.n_embd,
+                4 * config.n_embd,
+            ),
+
             nn.GELU(),
-            nn.Linear(4 * config.n_embd, config.n_embd),
+
+            nn.Linear(
+                4 * config.n_embd,
+                config.n_embd,
+            ),
+
             nn.Dropout(config.dropout),
         )
 
@@ -91,7 +171,12 @@ class MLP(nn.Module):
         return self.net(x)
 
 
+# ============================================================
+# Transformer Block
+# ============================================================
+
 class Block(nn.Module):
+
     def __init__(self, config):
         super().__init__()
 
@@ -102,45 +187,68 @@ class Block(nn.Module):
         self.mlp = MLP(config)
 
     def forward(self, x):
+
         x = x + self.attn(self.ln1(x))
+
         x = x + self.mlp(self.ln2(x))
+
         return x
 
 
+# ============================================================
+# Haroon GPT
+# ============================================================
+
 class HaroonGPT(nn.Module):
+
     def __init__(self, config=None):
         super().__init__()
 
         self.config = config or GPTConfig()
-        c = self.config
+
+        config = self.config
 
         self.token_emb = nn.Embedding(
-            c.vocab_size, c.n_embd
+            config.vocab_size,
+            config.n_embd,
         )
 
         self.pos_emb = nn.Embedding(
-            c.block_size, c.n_embd
+            config.block_size,
+            config.n_embd,
         )
 
-        self.drop = nn.Dropout(c.dropout)
+        self.drop = nn.Dropout(config.dropout)
 
         self.blocks = nn.Sequential(
-            *[Block(c) for _ in range(c.n_layer)]
+            *[
+                Block(config)
+                for _ in range(config.n_layer)
+            ]
         )
 
-        self.ln_f = nn.LayerNorm(c.n_embd)
+        self.ln_f = nn.LayerNorm(config.n_embd)
 
         self.lm_head = nn.Linear(
-            c.n_embd, c.vocab_size, bias=False
+            config.n_embd,
+            config.vocab_size,
+            bias=False,
         )
 
+        # Tie token embeddings and output weights.
         self.lm_head.weight = self.token_emb.weight
 
         self.apply(self._init_weights)
 
+    # --------------------------------------------------------
+    # Weight initialization
+    # --------------------------------------------------------
+
     @staticmethod
     def _init_weights(module):
+
         if isinstance(module, (nn.Linear, nn.Embedding)):
+
             nn.init.normal_(
                 module.weight,
                 mean=0.0,
@@ -153,49 +261,84 @@ class HaroonGPT(nn.Module):
             ):
                 nn.init.zeros_(module.bias)
 
+    # --------------------------------------------------------
+    # Forward pass
+    # --------------------------------------------------------
+
     def forward(self, idx, targets=None):
+
         if idx.ndim != 2:
             raise ValueError(
                 "Input must have shape [batch, sequence]"
             )
 
         if idx.shape[1] == 0:
-            raise ValueError("Input sequence cannot be empty")
+            raise ValueError(
+                "Input sequence cannot be empty"
+            )
 
         if (
             idx.min().item() < 0
             or idx.max().item() >= self.config.vocab_size
         ):
-            raise ValueError("Invalid token ID")
+            raise ValueError(
+                "Input contains invalid token IDs"
+            )
 
-        b, t = idx.shape
+        batch_size, seq_len = idx.shape
 
-        if t > self.config.block_size:
+        if seq_len > self.config.block_size:
+
             idx = idx[:, -self.config.block_size:]
-            t = idx.shape[1]
+
+            seq_len = idx.shape[1]
 
             if targets is not None:
-                targets = targets[:, -t:]
+                targets = targets[:, -seq_len:]
 
-        positions = torch.arange(t, device=idx.device)
+        positions = torch.arange(
+            seq_len,
+            device=idx.device,
+        )
+
+        token_embeddings = self.token_emb(idx)
+
+        position_embeddings = self.pos_emb(positions)
 
         x = self.drop(
-            self.token_emb(idx)
-            + self.pos_emb(positions)[None, :, :]
+            token_embeddings
+            + position_embeddings.unsqueeze(0)
         )
 
         x = self.blocks(x)
-        logits = self.lm_head(self.ln_f(x))
+
+        x = self.ln_f(x)
+
+        logits = self.lm_head(x)
 
         loss = None
 
         if targets is not None:
+
+            if targets.shape != idx.shape:
+                raise ValueError(
+                    "Targets must match the input shape"
+                )
+
             loss = F.cross_entropy(
-                logits.reshape(-1, logits.size(-1)),
+                logits.reshape(
+                    -1,
+                    logits.size(-1),
+                ),
+
                 targets.reshape(-1),
             )
 
         return logits, loss
+
+    # --------------------------------------------------------
+    # Text generation
+    # --------------------------------------------------------
 
     @torch.no_grad()
     def generate(
@@ -204,8 +347,8 @@ class HaroonGPT(nn.Module):
         max_new_tokens=96,
         temperature=0.8,
         top_k=40,
-        repetition_penalty=1.08,
     ):
+
         if idx.ndim != 2 or idx.shape[1] == 0:
             raise ValueError(
                 "Input must contain at least one token"
@@ -216,57 +359,74 @@ class HaroonGPT(nn.Module):
                 "Temperature must be greater than zero"
             )
 
-        self.eval()
-
-        for _ in range(max(0, int(max_new_tokens))):
-            context = idx[:, -self.config.block_size:]
-
-            logits, _ = self(context)
-
-            logits = (
-                logits[:, -1, :].float() / temperature
+        if top_k is not None and top_k < 1:
+            raise ValueError(
+                "top_k must be positive or None"
             )
 
-            # Reduce the chance of repeating recent bytes.
-            if repetition_penalty > 1.0:
-                recent = idx[:, -32:]
+        was_training = self.training
 
-                for token_id in recent[0].unique():
-                    token_id = int(token_id)
+        self.eval()
 
-                    if logits[0, token_id] > 0:
-                        logits[0, token_id] /= repetition_penalty
-                    else:
-                        logits[0, token_id] *= repetition_penalty
+        try:
 
-            # Top-k sampling.
-            if top_k is not None and top_k > 0:
-                k = min(int(top_k), logits.size(-1))
+            for _ in range(max(0, int(max_new_tokens))):
 
-                values, _ = torch.topk(logits, k)
-                cutoff = values[:, [-1]]
+                context = idx[:, -self.config.block_size:]
 
-                logits = logits.masked_fill(
-                    logits < cutoff,
-                    float("-inf"),
-                )
+                logits, _ = self(context)
 
-            probs = F.softmax(logits, dim=-1)
+                logits = logits[:, -1, :].float()
 
-            if (
-                not torch.isfinite(probs).all()
-                or probs.sum().item() <= 0
-            ):
-                next_id = logits.argmax(
+                logits = logits / temperature
+
+                # Keep only the most likely tokens.
+                if top_k is not None:
+
+                    k = min(
+                        int(top_k),
+                        logits.size(-1),
+                    )
+
+                    values, _ = torch.topk(
+                        logits,
+                        k,
+                        dim=-1,
+                    )
+
+                    cutoff = values[:, [-1]]
+
+                    logits = logits.masked_fill(
+                        logits < cutoff,
+                        float("-inf"),
+                    )
+
+                probabilities = F.softmax(
+                    logits,
                     dim=-1,
-                    keepdim=True,
-                )
-            else:
-                next_id = torch.multinomial(
-                    probs,
-                    num_samples=1,
                 )
 
-            idx = torch.cat((idx, next_id), dim=1)
+                # Defensive fallback if probabilities are invalid.
+                if not torch.isfinite(probabilities).all():
 
-        return idx
+                    next_token = logits.argmax(
+                        dim=-1,
+                        keepdim=True,
+                    )
+
+                else:
+
+                    next_token = torch.multinomial(
+                        probabilities,
+                        num_samples=1,
+                    )
+
+                idx = torch.cat(
+                    (idx, next_token),
+                    dim=1,
+                )
+
+            return idx
+
+        finally:
+            self.train(was_training)
