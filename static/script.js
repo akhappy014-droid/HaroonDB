@@ -29,7 +29,21 @@ async function sendMessage(text){
   const typing=addMessage('assistant','يفكر Haroon...','typing');
   try{
     const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text,history:historyItems.slice(-8,-1)})});
-    const data=await res.json();
+    let data;
+
+try {
+    data = await response.json();
+} catch (error) {
+    throw new Error(
+        "تعذر قراءة رد الخادم. ربما أعاد الخادم التشغيل أو انتهت مهلة الطلب."
+    );
+}
+
+if (!response.ok) {
+    throw new Error(
+        data.error || data.status || `HTTP ${response.status}`
+    );
+}
     typing.remove();
     if(!res.ok) throw new Error(data.error||'حدث خطأ أثناء الاتصال بالنموذج.');
     const answer=data.answer||'لم يرجع النموذج إجابة.';
