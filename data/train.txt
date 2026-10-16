@@ -1,23 +1,66 @@
-المستخدم: ما عاصمة الأردن؟
-Haroon: عاصمة الأردن هي عمّان.
+المستخدم: ما هو المتغير في Luau؟
+Haroon: المتغير مساحة لتخزين قيمة يمكن استخدامها أثناء تشغيل البرنامج. مثال:
+local score = 10
+print(score)
 
-المستخدم: What is the capital of Jordan?
-Haroon: The capital of Jordan is Amman.
+المستخدم: كيف أغير قيمة متغير في Luau؟
+Haroon: يمكنك إسناد قيمة جديدة إلى المتغير باستخدام علامة المساواة:
+local score = 10
+score = 20
+print(score)
 
-المستخدم: ما الفرق بين المتغير والثابت؟
-Haroon: المتغير يمكن تغيير قيمته أثناء تشغيل البرنامج، بينما الثابت يمثل قيمة لا يُفترض تغييرها بعد تعريفها.
+المستخدم: كيف أنشئ دالة في Luau؟
+Haroon: نستخدم الكلمة function لتعريف دالة:
+local function greet()
+    print("Hello!")
+end
 
-المستخدم: Explain a Python function.
-Haroon: A function is a reusable block of code that performs a specific task.
+greet()
 
-المستخدم: كيف أتعامل مع خطأ في البرنامج؟
-Haroon: اقرأ رسالة الخطأ أولًا، وحدد السطر الذي حدث فيه الخطأ، ثم افحص القيم والمدخلات قبل تعديل الكود.
+المستخدم: ما وظيفة print في Luau؟
+Haroon: تستخدم print لعرض قيمة أو رسالة في نافذة Output داخل Roblox Studio. مثال:
+print("Hello Roblox")
 
-المستخدم: ما هو التعلم الآلي؟
-Haroon: التعلم الآلي مجال من الذكاء الاصطناعي يتيح للأنظمة تعلم أنماط من البيانات واستخدامها لإجراء توقعات أو قرارات.
+المستخدم: كيف أكرر أمرًا عشر مرات؟
+Haroon: يمكنك استخدام حلقة for:
+for i = 1, 10 do
+    print(i)
+end
 
-المستخدم: What is machine learning?
-Haroon: Machine learning is a field of artificial intelligence in which systems learn patterns from data to make predictions or decisions.
+المستخدم: كيف أتحقق من وجود عنصر في Roblox؟
+Haroon: يمكنك استخدام FindFirstChild:
+local part = workspace:FindFirstChild("Part")
 
-المستخدم: هل يمكن أن تخطئ؟
-Haroon: نعم. قد أقدم معلومات غير دقيقة، لذلك ينبغي التحقق من المعلومات المهمة واختبار الأكواد قبل استخدامها.
+if part then
+    print("Part found")
+else
+    print("Part not found")
+end
+
+المستخدم: ما الفرق بين Script وLocalScript؟
+Haroon: يعمل Script عادة على الخادم بحسب موقعه ونوعه، بينما يعمل LocalScript على جهاز اللاعب في المواقع المدعومة. استخدم الخادم للعمليات الحساسة مثل التحقق من المشتريات، والعميل للواجهات والتحكم المحلي.
+
+المستخدم: كيف أتعامل مع لمس Part؟
+Haroon: يمكن استخدام حدث Touched:
+local part = script.Parent
+
+part.Touched:Connect(function(hit)
+    print("The part was touched")
+end)
+
+المستخدم: كيف أتحقق من أن الجزء الذي لمس العنصر تابع للاعب؟
+Haroon: يمكنك البحث عن نموذج الشخصية ثم الحصول على اللاعب باستخدام Players:GetPlayerFromCharacter:
+local Players = game:GetService("Players")
+
+script.Parent.Touched:Connect(function(hit)
+    local character = hit:FindFirstAncestorOfClass("Model")
+    if not character then return end
+
+    local player = Players:GetPlayerFromCharacter(character)
+    if player then
+        print(player.Name .. " touched the part")
+    end
+end)
+
+المستخدم: كيف أكتشف خطأ في الكود؟
+Haroon: اقرأ رسالة الخطأ في Output، وحدد السطر المذكور، ثم تحقق من أسماء المتغيرات والمسارات وأنواع القيم. يمكنك إضافة print مؤقتًا لمعرفة القيم أثناء التشغيل.
