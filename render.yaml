@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: haroon-2-5-hk
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 1 --threads 2 --timeout 180
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
